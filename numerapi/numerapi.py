@@ -2,13 +2,11 @@
 
 import zipfile
 import os
-import datetime
 import decimal
 from typing import List, Dict
 from io import BytesIO
 
 import requests
-import pytz
 import pandas as pd
 
 from numerapi import utils
@@ -593,7 +591,8 @@ class NumerAPI(base_api.Api):
         headers = {"x_compute_id": os.getenv("NUMERAI_COMPUTE_ID")}
         with open(file_path, 'rb') if df is None else buffer_csv as file:
             requests.put(
-                upload_auth['url'], data=file.read(), headers=headers)
+                upload_auth['url'], data=file.read(), headers=headers,
+                timeout=600)
         create_query = '''
             mutation($filename: String!
                      $tournament: Int!
@@ -616,41 +615,6 @@ class NumerAPI(base_api.Api):
         submission_id = create['data']['create_submission']['id']
         return submission_id
 
-    def check_new_round(self, hours: int = 24, tournament: int = 8) -> bool:
-        """Check if a new round has started within the last `hours`.
-
-        Args:
-            hours (int, optional): timeframe to consider, defaults to 24
-            tournament (int): ID of the tournament (optional, defaults to 8)
-                -- DEPRECATED there is only one tournament nowadays
-
-        Returns:
-            bool: True if a new round has started, False otherwise.
-
-        Example:
-            >>> NumerAPI().check_new_round()
-            False
-        """
-        query = '''
-            query($tournament: Int!) {
-              rounds(tournament: $tournament
-                     number: 0) {
-                number
-                openTime
-              }
-            }
-        '''
-        arguments = {'tournament': tournament}
-        raw = self.raw_query(query, arguments)['data']['rounds'][0]
-        if raw is None:
-            return False
-        open_time = utils.parse_datetime_string(raw['openTime'])
-        now = datetime.datetime.utcnow().replace(tzinfo=pytz.utc)
-        is_new_round = open_time > now - datetime.timedelta(hours=hours)
-        return is_new_round
-
-    #  ################# V2 #####################################
-
     def get_leaderboard(self, limit: int = 50, offset: int = 0) -> List[Dict]:
         """Get the current leaderboard
 
@@ -664,46 +628,24 @@ class NumerAPI(base_api.Api):
             Each dict contains the following items:
 
                 * username (`str`)
-                * tier (`str`)
-                * rolling_score_rep (`float`)
                 * rank (`int`)
-                * prevRank (`int`)
-                * stakedRank (`int`)
-                * prevStakedRank (`int`)
                 * nmrStaked (`decimal.Decimal`)
-                * oldStakeValue (`decimal.Decimal`)
-                * leaderboardBonus (`decimal.Decimal`)
-                * averageCorrelationPayout (`decimal.Decimal`)
-                * payoutPending (`decimal.Decimal`)
-                * payoutSettled (`decimal.Decimal`)
-                * bonusPerc (`float`)
-                * badges (`list of str`)
-                * corrRep (`float`)
-                * corrRank (`int`)
+                * corr20Rep (`float`)
+                * corj60Rep (`float`)
                 * fncRep (`float`)
-                * fncRank (`int`)
                 * fncV3Rep (`float`)
-                * fncV3Rank (`int`)
                 * tcRep (`float`)
-                * tcRank (`int`)
+                * payout_selection_tc_multiplier (`float`)
+                * team (`bool`)
+                * return_1_day (`float`)
+                * return_52_day (`float`)
+                * return_13_day (`float`)
 
         Example:
             >>> numerapi.NumerAPI().get_leaderboard(1)
             [{'username': 'anton',
-              'tier': 'C',
-              'rolling_score_rep': -0.00499721,
               'rank': 143,
-              'prevRank': 116,
-              'stakedRank': 103,
-              'prevStakedRank': 102,
               'nmrStaked': Decimal('12'),
-              'oldStakeValue': Decimal('12'),
-              `leaderboardBonus`: Decimal('0.1')
-              `averageCorrelationPayout`: Decimal('0.1')
-              `payoutPending`: Decimal('0.1')
-              `payoutSettled`: Decimal('0.1')
-              'bonusPerc': 0.5,
-              'badges': ['submission-streak_1', 'burned_2']
               ...
               }]
 
@@ -713,29 +655,19 @@ class NumerAPI(base_api.Api):
                   $offset: Int!) {
               v2Leaderboard(limit: $limit
                             offset: $offset) {
-                bonusPerc
                 nmrStaked
-                oldStakeValue
-                prevRank
-                prevStakedRank
                 rank
-                stakedRank
-                rolling_score_rep
-                tier
                 username
-                leaderboardBonus
-                averageCorrelationPayout
-                payoutPending
-                payoutSettled
-                badges
-                corrRep
-                corrRank
+                corr20Rep
+                corj60Rep
                 fncRep
-                fncRank
                 fncV3Rep
-                fncV3Rank
                 tcRep
-                tcRank
+                payout_selection_tc_multiplier
+                team
+                return_1_day
+                return_52_weeks
+                return_13_weeks
               }
             }
         '''
@@ -987,70 +919,8 @@ class NumerAPI(base_api.Api):
     def daily_submissions_performances(self, username: str) -> List[Dict]:
         """Fetch daily performance of a user's submissions.
 
-        Args:
-            username (str)
-
-        Returns:
-            list of dicts: list of daily submission performance entries
-
-            For each entry in the list, there is a dict with the following
-            content:
-
-                * date (`datetime`)
-                * correlation (`float`)
-                * corrPercentile (`float`)
-                * roundNumber (`int`)
-                * mmc (`float`): metamodel contribution
-                * mmcPercentile (`float`)
-                * fnc (`float`): feature neutral correlation
-                * fncPercentile (`float`)
-                * tc (`float`): true contribution
-                * tcPercentile (`float`)
-                * correlationWithMetamodel (`float`)
-
-        Example:
-            >>> api = NumerAPI()
-            >>> api.daily_user_performances("uuazed")
-            [{'roundNumber': 181,
-              'correlation': -0.011765912,
-              'corrPercentile': 0.8,
-              'date': datetime.datetime(2019, 10, 16, 0, 0),
-              'mmc': 0.3,
-              'mmcPercentile': 0.8,
-              'fnc': 0.1,
-              'fncPercentile': 0.8,
-              'tc': 0.1,
-              'tcPercentile': 0.8,
-              'correlationWithMetamodel': 0.87},
-              ...
-            ]
+        DEPRECATED - please use `daily_model_performances` instead"
         """
-        query = """
-          query($username: String!) {
-            v2UserProfile(username: $username) {
-              dailySubmissionPerformances {
-                date
-                correlation
-                corrPercentile
-                roundNumber
-                mmc
-                mmcPercentile
-                fnc
-                fncPercentile
-                tc
-                tcPercentile
-                correlationWithMetamodel
-              }
-            }
-          }
-        """
-        arguments = {'username': username}
-        data = self.raw_query(query, arguments)['data']['v2UserProfile']
-        performances = data['dailySubmissionPerformances']
-        # convert strings to python objects
-        for perf in performances:
-            utils.replace(perf, "date", utils.parse_datetime_string)
-        # remove useless items
-        performances = [p for p in performances
-                        if any([p['correlation'], p['fnc'], p['mmc']])]
-        return performances
+        self.logger.warning(
+            "DEPRECATED - please use `daily_model_performances` instead")
+        return self.daily_model_performances(username)

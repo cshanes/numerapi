@@ -1,8 +1,36 @@
 # Changelog
 Notable changes to this project.
 
-## [dev] - unreleased
+## [2.12.9] - 2022-12-02
+- numerapi-cli: make `check-new-round` more robust
+- more robust `check_new_round` and `check_round_open` - working around some
+  edge cases, that occur during the time without any active round.
+
+## [2.12.8] - 2022-11-21
+- change default argument for `check_new_round` to 12 hours
+- deprecate `daily_submissions_performances`
+- update `get_leaderboard` to reflect changes in the backend
+- add downloads per month batch
+- fix docs
+- update README
+
+## [2.12.7] - 2022-11-02
+- fix `check_round_open`
+
+## [2.12.6] - 2022-11-01
+- add `check_round_open` to check if there is a currently an active round
+- make `check_new_round` accessiable from `SignalsAPI`
+
+## [2.12.5] - 2022-10-24
+- add fncV3 to `daily_submissions_performances`
+- add `TC` to `SignalsAPI.get_leaderboard`
+- add `TC` and `corr60` to `SignalsAPI.daily_model_performances`
+- add `TC` to `SignalsAPI.daily_submissions_performances`
+- define timeouts for all web call made with `requests`
+
+## [2.12.4] - 2022-08-24
 - add `set_stake_type` to change payout mode and multipliers (PR #83)
+- add auth to `round_details` query (PR #86)
 
 ## [2.12.3] - 2022-07-03
 - fix directory check in download_dataset in the last update

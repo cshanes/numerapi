@@ -1,9 +1,11 @@
 """Parts of the API that is shared between Signals and Classic"""
 
 import os
+import datetime
 import logging
 from typing import Dict, List
 from io import BytesIO
+import pytz
 
 import pandas as pd
 import requests
@@ -493,7 +495,7 @@ class Api:
             'diagnosticsUploadAuth', file_path, tournament, model_id)
 
         with open(file_path, 'rb') if df is None else buffer_csv as file:
-            requests.put(upload_auth['url'], data=file.read())
+            requests.put(upload_auth['url'], data=file.read(), timeout=600)
         create_query = '''
             mutation($filename: String!
                      $tournament: Int!
@@ -936,3 +938,79 @@ class Api:
         result = self.raw_query(query, args, authorization=True)
 
         return result
+
+    def check_round_open(self) -> bool:
+        """Check if a round is currently open.
+
+        Returns:
+            bool: True if a round is currently open for submissions, False otherwise.
+
+        Example:
+            >>> NumerAPI().check_round_open()
+            False
+        """
+        query = '''
+            query($tournament: Int!) {
+              rounds(tournament: $tournament
+              number: 0) {
+                number
+                openTime
+                closeStakingTime
+              }
+            }
+        '''
+        arguments = {'tournament': self.tournament_id}
+        # in some period in between rounds, "number: 0" returns Value error -
+        # "Current round not open for submissions", because there is no active
+        # round. This is catched by the try / except.
+        try:
+            raw = self.raw_query(query, arguments)['data']['rounds'][0]
+        except ValueError:
+            return False
+        if raw is None:
+            return False
+        open_time = utils.parse_datetime_string(raw['openTime'])
+        deadline = utils.parse_datetime_string(raw["closeStakingTime"])
+        now = datetime.datetime.utcnow().replace(tzinfo=pytz.utc)
+        is_open = open_time < now < deadline
+        return is_open
+
+    def check_new_round(self, hours: int = 12, tournament: int = None) -> bool:
+        """Check if a new round has started within the last `hours`.
+
+        Args:
+            hours (int, optional): timeframe to consider, defaults to 12
+            tournament (int): ID of the tournament (optional)
+                -- DEPRECATED this is now automatically filled
+
+        Returns:
+            bool: True if a new round has started, False otherwise.
+
+        Example:
+            >>> NumerAPI().check_new_round()
+            False
+        """
+        query = '''
+            query($tournament: Int!) {
+              rounds(tournament: $tournament
+                     number: 0) {
+                number
+                openTime
+              }
+            }
+        '''
+        tournament = self.tournament_id if tournament is None else tournament
+        arguments = {'tournament': tournament}
+        # in some period in between rounds, "number: 0" returns Value error -
+        # "Current round not open for submissions", because there is no active
+        # round. This is catched by the try / except.
+        try:
+            raw = self.raw_query(query, arguments)['data']['rounds'][0]
+        except ValueError:
+            return False
+        if raw is None:
+            return False
+        open_time = utils.parse_datetime_string(raw['openTime'])
+        now = datetime.datetime.utcnow().replace(tzinfo=pytz.utc)
+        is_new_round = open_time > now - datetime.timedelta(hours=hours)
+        return is_new_round

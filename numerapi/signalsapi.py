@@ -39,8 +39,10 @@ class SignalsAPI(base_api.Api):
                 * today (`float`)
                 * mmc (`float`)
                 * mmcRank (`int`)
-                * ic (`float`)
+                * icRep (`float`)
                 * icRank (`int`)
+                * tcRep (`float`)
+                * tcRank (`int`)
                 * nmrStaked (`float`)
         Example:
             >>> numerapi.SignalsAPI().get_leaderboard(1)
@@ -52,8 +54,9 @@ class SignalsAPI(base_api.Api):
               'mmc': -0.0101202715,
               'mmcRank': 30,
               'nmrStaked': 13.0,
-              'ic': -0.0101202715,
+              'icRep': -0.0101202715,
               'icRank': 30,
+              ..
              }]
         """
         query = '''
@@ -71,6 +74,8 @@ class SignalsAPI(base_api.Api):
                 nmrStaked
                 icRank
                 icRep
+                tcRep
+                tcRank
               }
             }
         '''
@@ -135,7 +140,8 @@ class SignalsAPI(base_api.Api):
         headers = {"x_compute_id": os.getenv("NUMERAI_COMPUTE_ID")}
 
         with open(file_path, 'rb') if df is None else buffer_csv as file:
-            requests.put(auth['url'], data=file.read(), headers=headers)
+            requests.put(auth['url'], data=file.read(),
+                         headers=headers, timeout=60)
         create_query = '''
             mutation($filename: String!
                      $modelId: String
@@ -285,8 +291,12 @@ class SignalsAPI(base_api.Api):
                 * mmcRep (`float` or None)
                 * icRank (`int`)
                 * icRep (`float` or None)
+                * tcRank (`int`)
+                * tcRep (`float` or None)
                 * corr20dRank (`int`)
                 * corr20dRep (`float` or None)
+                * corr60dRank (`int`)
+                * corr60dRep (`float` or None)
                 * mmc20dRank (`int`)
                 * mmc20dRep (`float` or None)
 
@@ -303,7 +313,8 @@ class SignalsAPI(base_api.Api):
               'mmcRank': 6,
               'mmcRep': 0.0,
               'icRank': 6,
-              'icRep': 0.0},
+              'icRep': 0.0,
+              ...},
               ...
               ]
         """
@@ -318,8 +329,12 @@ class SignalsAPI(base_api.Api):
                 mmcRank
                 corr20dRep
                 corr20dRank
+                corr60dRep
+                corr60dRank
                 icRep
                 icRank
+                tcRank
+                tcRep
                 mmc20dRep
                 mmc20dRank
               }
@@ -404,6 +419,7 @@ class SignalsAPI(base_api.Api):
                 * correlation (`float`)
                 * mmc (`float`)
                 * ic (`float`)
+                * tc (`float`)
                 * roundNumber (`int`)
                 * corrRep (`float`)
                 * mmcRep (`float`)
@@ -420,7 +436,8 @@ class SignalsAPI(base_api.Api):
               'ic': 0.11,
               'mmcRep': None,
               'roundNumber': 226,
-              'correlation': 0.03}
+              'correlation': 0.03,
+              `tc`: 0.3}
              ...
               ]
         """
@@ -437,6 +454,7 @@ class SignalsAPI(base_api.Api):
                 corrRep
                 mmcRep
                 ic
+                tc
               }
             }
           }
@@ -460,7 +478,8 @@ class SignalsAPI(base_api.Api):
             >>> SignalsAPI().ticker_universe()
             ["MSFT", "AMZN", "APPL", ...]
         """
-        result = requests.get(self.TICKER_UNIVERSE_URL, stream=True)
+        result = requests.get(
+            self.TICKER_UNIVERSE_URL, stream=True, timeout=120)
         iterator = codecs.iterdecode(result.iter_lines(), 'utf-8')
         tickers = [t.strip() for t in iterator if t != 'bloomberg_ticker']
         return tickers
